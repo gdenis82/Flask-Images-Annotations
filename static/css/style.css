@@ -1,0 +1,385 @@
+/* General Styles */
+html, body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+    overflow: hidden; /* Prevent scrolling on the body */
+    height: 100%; /* Ensure full height */
+    margin: 0; /* Remove default margin */
+    padding: 0; /* Remove default padding */
+}
+
+.navbar {
+    margin-bottom: 20px;
+}
+
+/* Project Cards */
+.card {
+    transition: transform 0.2s, box-shadow 0.2s;
+    height: 100%;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+.card-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.card-text {
+    flex-grow: 1;
+}
+
+/* Annotation Interface */
+.annotation-container {
+    display: flex;
+    height: calc(100vh - 56px);
+    overflow: hidden; /* Prevent scrolling on the container */
+}
+
+.sidebar {
+    width: 300px;
+    background-color: #f8f9fa;
+    border-right: 1px solid #dee2e6;
+    padding: 15px;
+    overflow-y: auto;
+    position: fixed;
+    height: calc(100vh - 56px);
+    z-index: 100;
+}
+
+
+.main-content {
+    flex-grow: 1;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    margin-left: 300px;
+    overflow: hidden; /* Prevent scrolling on the main content */
+}
+
+.image-container {
+    position: relative;
+    flex-grow: 1;
+    background-color: #e9ecef;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 60px;
+}
+
+.canvas-container {
+    position: relative;
+}
+
+#imageCanvas, #annotationCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.toolbar {
+    padding: 10px 0;
+    border-bottom: 1px solid #dee2e6;
+    margin-bottom: 15px;
+    position: fixed;
+    top: 76px;
+    left: 315px;
+    right: 15px;
+    background-color: #f8f9fa;
+    z-index: 90;
+}
+
+.image-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 15px;
+}
+
+.image-item {
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.2s;
+}
+
+.image-item:hover {
+    background-color: #e9ecef;
+}
+
+.image-item.active {
+    background-color: #007bff;
+    color: white;
+}
+
+.image-thumbnail {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 3px;
+    margin-right: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.image-name {
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-grow: 1;
+}
+
+.image-item.active .image-thumbnail {
+    border-color: #ffffff;
+}
+
+.delete-image-btn {
+    padding: 2px 5px;
+    font-size: 0.8rem;
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.image-item:hover .delete-image-btn {
+    opacity: 1;
+}
+
+.image-item.active .delete-image-btn {
+    color: white;
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+.annotation-controls {
+    margin-top: 15px;
+}
+
+.class-selector {
+    margin-bottom: 15px;
+}
+
+.tool-btn {
+    margin-right: 5px;
+}
+
+.tool-btn.active {
+    background-color: #0d6efd;
+    color: white;
+}
+
+/* Annotations list styles */
+.annotations-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+.annotation-item {
+    padding: 8px;
+    cursor: pointer;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.2s;
+}
+
+.annotation-item:last-child {
+    border-bottom: none;
+}
+
+.annotation-item:hover {
+    background-color: #e9ecef;
+}
+
+.annotation-item.active {
+    background-color: #007bff;
+    color: white;
+}
+
+.annotation-type {
+    display: inline-block;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    margin-right: 8px;
+}
+
+.annotation-type.polygon {
+    background-color: #28a745;
+    color: white;
+}
+
+.annotation-type.box {
+    background-color: #fd7e14;
+    color: white;
+}
+
+.annotation-color {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    margin-right: 8px;
+    border: 1px solid #dee2e6;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.annotation-color:hover {
+    transform: scale(1.2);
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+}
+
+.annotation-class-container {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+}
+
+.annotation-class {
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: background-color 0.2s;
+}
+
+.annotation-class:hover {
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.annotation-item.active .annotation-class:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.class-dropdown {
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.class-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.class-option:hover {
+    background-color: #f8f9fa;
+}
+
+.class-option.active {
+    background-color: #e9ecef;
+    font-weight: bold;
+}
+
+/* Custom Color Picker */
+.custom-color-picker {
+    position: absolute;
+    z-index: 1000;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 150px;
+}
+
+.custom-color-picker input[type="color"] {
+    width: 100%;
+    height: 40px;
+    margin-bottom: 0;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.annotation-item.active .annotation-color {
+    border-color: #ffffff;
+}
+
+.delete-annotation-btn {
+    padding: 2px 5px;
+    font-size: 0.8rem;
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.annotation-item:hover .delete-annotation-btn {
+    opacity: 1;
+}
+
+.annotation-item.active .delete-annotation-btn {
+    color: white;
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+/* Upload progress styles */
+.upload-progress {
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.upload-progress:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.upload-progress .progress {
+    height: 10px;
+    border-radius: 5px;
+    background-color: #e9ecef;
+    margin-top: 5px;
+}
+
+.upload-progress .progress-bar {
+    background-color: #007bff;
+    border-radius: 5px;
+    transition: width 0.5s ease;
+}
+
+#upload-queue-status {
+    background-color: #f8f9fa;
+    border-left: 4px solid #17a2b8;
+    margin-bottom: 10px;
+    padding: 10px;
+    font-weight: bold;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .annotation-container {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .image-container {
+        height: 50vh;
+    }
+}
