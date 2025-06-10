@@ -2,10 +2,10 @@
 html, body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #f8f9fa;
-    overflow: hidden; /* Prevent scrolling on the body */
     height: 100%; /* Ensure full height */
     margin: 0; /* Remove default margin */
     padding: 0; /* Remove default padding */
+    overflow: hidden; /* Prevent scrolling at page level */
 }
 
 .navbar {
@@ -23,6 +23,49 @@ html, body {
     box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
 }
 
+/* Loading count animation */
+.loading-count {
+    animation: pulse 1.5s infinite;
+    opacity: 0.7;
+    display: inline-block;
+    position: relative;
+}
+
+.loading-count::after {
+    content: "";
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border: 2px solid #007bff;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+    margin-left: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 0.5;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0.5;
+    }
+}
+
+@keyframes spin {
+    0% {
+        transform: translateY(-50%) rotate(0deg);
+    }
+    100% {
+        transform: translateY(-50%) rotate(360deg);
+    }
+}
+
 .card-body {
     display: flex;
     flex-direction: column;
@@ -36,7 +79,7 @@ html, body {
 .annotation-container {
     display: flex;
     height: calc(100vh - 56px);
-    overflow: hidden; /* Prevent scrolling on the container */
+    overflow: hidden; /* Prevent scrolling in annotation container */
 }
 
 .sidebar {
@@ -57,7 +100,7 @@ html, body {
     display: flex;
     flex-direction: column;
     margin-left: 300px;
-    overflow: hidden; /* Prevent scrolling on the main content */
+    overflow: hidden; /* Prevent scrolling in main content */
 }
 
 .image-container {
@@ -68,7 +111,7 @@ html, body {
     display: flex;
     justify-content: center;
     align-items: center;
-    margin-top: 60px;
+    margin-top: 10px;
 }
 
 .canvas-container {
@@ -221,6 +264,55 @@ html, body {
 .annotation-type.box {
     background-color: #fd7e14;
     color: white;
+}
+
+.annotation-type.background {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* Background annotation styles */
+.background-annotation {
+    background-color: #f8f9fa;
+    border-left: 4px solid #6c757d;
+}
+
+.annotation-description {
+    font-size: 0.9rem;
+    color: #6c757d;
+    flex-grow: 1;
+    margin-left: 5px;
+}
+
+/* Tab navigation styles */
+#imageTabs {
+    margin-bottom: 15px;
+}
+
+#imageTabs .nav-link {
+    color: #495057;
+    background-color: #f8f9fa;
+    border-color: #dee2e6 #dee2e6 #fff;
+}
+
+#imageTabs .nav-link.active {
+    color: #007bff;
+    background-color: #fff;
+    border-color: #dee2e6 #dee2e6 #fff;
+    font-weight: bold;
+}
+
+/* Mark as Background button */
+#markAsBackgroundBtn {
+    margin-left: 10px;
+    background-color: #6c757d;
+    color: white;
+    border-color: #6c757d;
+}
+
+#markAsBackgroundBtn:hover {
+    background-color: #5a6268;
+    border-color: #545b62;
 }
 
 .annotation-color {
