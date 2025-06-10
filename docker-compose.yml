@@ -6,6 +6,11 @@ services:
       - "5000:5000"
     volumes:
       - ./projects:/app/projects
+    environment:
+      - REDIS_HOST=redis
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - BROKER_CONNECTION_RETRY_ON_STARTUP=true
     env_file:
       - .env
     depends_on:
@@ -15,11 +20,12 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "nc", "-z", "localhost", "5000"]
+      interval: 10s
+      timeout: 5s
       retries: 3
-      start_period: 40s
+      start_period: 10s
+
 
 
 
@@ -35,19 +41,20 @@ services:
       - app-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 3
-      start_period: 10s
+      retries: 5
+
 
 
   celery_worker:
     build: .
-    command: celery -A app.celery worker --loglevel=info
+    command: celery -A app.celery worker --loglevel=info --uid=1000 --gid=1000
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
-      - RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - REDIS_HOST=redis
+      - BROKER_CONNECTION_RETRY_ON_STARTUP=true
     volumes:
       - ./projects:/app/projects
     env_file:
@@ -60,12 +67,7 @@ services:
     restart: unless-stopped
     networks:
       - app-network
-    healthcheck:
-      test: ["CMD", "celery", "-A", "app.celery", "inspect", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+
 
 
 
