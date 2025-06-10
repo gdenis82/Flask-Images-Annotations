@@ -1,8 +1,5 @@
 document.addEventListener('DOMContentLoaded', function() {
     // DOM Elements
-    const imageUpload = document.getElementById('imageUpload');
-    const folderUpload = document.getElementById('folderUpload');
-    const imageList = document.getElementById('imageList');
     const imageCanvas = document.getElementById('imageCanvas');
     const annotationCanvas = document.getElementById('annotationCanvas');
     const canvasContainer = document.getElementById('canvasContainer');
@@ -17,8 +14,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const zoomReset = document.getElementById('zoomReset');
 
     // Image management dropdown elements
-    const uploadImagesDropdownBtn = document.getElementById('uploadImagesDropdownBtn');
-    const uploadFolderDropdownBtn = document.getElementById('uploadFolderDropdownBtn');
     const deleteAllImagesDropdownBtn = document.getElementById('deleteAllImagesDropdownBtn');
 
     // Navigation buttons
@@ -45,6 +40,13 @@ document.addEventListener('DOMContentLoaded', function() {
     let isDraggingVertex = false; // For polygon vertex movement
     let projectName = ''; // Project name
     let classColors = {}; // Custom colors for classes
+
+    // Tab-related variables
+    let currentTab = 'all-images'; // Default tab
+    let annotatedImages = []; // Array to store images with annotations
+    let unannotatedImages = []; // Array to store images without annotations
+    let backgroundImages = []; // Array to store images with background annotations
+    let filteredImages = []; // Array to store images filtered by the current tab
 
     // Upload queue variables
     let uploadQueue = []; // Queue of files to upload
@@ -73,43 +75,92 @@ document.addEventListener('DOMContentLoaded', function() {
         // Load any pending uploads from localStorage
         loadPendingUploads();
 
-        // Set up event listeners for image management dropdown
-        uploadImagesDropdownBtn.addEventListener('click', () => imageUpload.click());
-        imageUpload.addEventListener('change', handleImageUpload);
-
-        uploadFolderDropdownBtn.addEventListener('click', () => folderUpload.click());
-        folderUpload.addEventListener('change', handleFolderUpload);
-
-        deleteAllImagesDropdownBtn.addEventListener('click', confirmDeleteAllImages);
+        // Set up event listener for delete all images button
+        if (deleteAllImagesDropdownBtn) {
+            deleteAllImagesDropdownBtn.addEventListener('click', confirmDeleteAllImages);
+        }
 
         // Set up event listeners for navigation buttons
-        prevImageBtn.addEventListener('click', navigateToPreviousImage);
-        nextImageBtn.addEventListener('click', navigateToNextImage);
+        if (prevImageBtn) {
+            prevImageBtn.addEventListener('click', navigateToPreviousImage);
+        }
+        if (nextImageBtn) {
+            nextImageBtn.addEventListener('click', navigateToNextImage);
+        }
 
         // Set up event listeners for annotation tools
-        polygonTool.addEventListener('click', () => setTool('polygon'));
-        boxTool.addEventListener('click', () => setTool('box'));
+        if (polygonTool) {
+            polygonTool.addEventListener('click', () => setTool('polygon'));
+        }
+        if (boxTool) {
+            boxTool.addEventListener('click', () => setTool('box'));
+        }
 
-        confirmExportBtn.addEventListener('click', exportYOLO);
-        saveProjectSettingsBtn.addEventListener('click', saveProjectSettings);
-        document.getElementById('addClass').addEventListener('click', addClassField);
+        // Set up event listener for "Mark as Background" button
+        const markAsBackgroundBtn = document.getElementById('markAsBackgroundBtn');
+        if (markAsBackgroundBtn) {
+            markAsBackgroundBtn.addEventListener('click', markAsBackground);
+        }
 
-        zoomIn.addEventListener('click', () => zoom(1.1));
-        zoomOut.addEventListener('click', () => zoom(0.9));
-        zoomReset.addEventListener('click', resetZoom);
+        // Set up event listeners for filter toggle buttons
+        const allImagesTab = document.getElementById('all-images-tab');
+        const annotatedImagesTab = document.getElementById('annotated-images-tab');
+        const unannotatedImagesTab = document.getElementById('unannotated-images-tab');
+        const backgroundImagesTab = document.getElementById('background-images-tab');
+
+        if (allImagesTab) {
+            allImagesTab.addEventListener('click', () => switchTab('all-images'));
+        }
+        if (annotatedImagesTab) {
+            annotatedImagesTab.addEventListener('click', () => switchTab('annotated-images'));
+        }
+        if (unannotatedImagesTab) {
+            unannotatedImagesTab.addEventListener('click', () => switchTab('unannotated-images'));
+        }
+        if (backgroundImagesTab) {
+            backgroundImagesTab.addEventListener('click', () => switchTab('background-images'));
+        }
+
+        // Initialize tab counts
+        updateTabCounts();
+
+        // Add null checks before adding event listeners
+        if (confirmExportBtn) {
+            confirmExportBtn.addEventListener('click', exportYOLO);
+        }
+        if (saveProjectSettingsBtn) {
+            saveProjectSettingsBtn.addEventListener('click', saveProjectSettings);
+        }
+        const addClassBtn = document.getElementById('addClass');
+        if (addClassBtn) {
+            addClassBtn.addEventListener('click', addClassField);
+        }
+
+        // Add null checks for zoom controls
+        if (zoomIn) {
+            zoomIn.addEventListener('click', () => zoom(1.1));
+        }
+        if (zoomOut) {
+            zoomOut.addEventListener('click', () => zoom(0.9));
+        }
+        if (zoomReset) {
+            zoomReset.addEventListener('click', resetZoom);
+        }
 
         // Add mouse wheel zoom support
-        annotationCanvas.addEventListener('wheel', handleMouseWheel, { passive: false });
+        if (annotationCanvas) {
+            annotationCanvas.addEventListener('wheel', handleMouseWheel, { passive: false });
 
-        // Canvas event listeners
-        // Left-click (button 0): Draw polygons and edit vertices
-        // Right-click (button 2): Select annotations
-        annotationCanvas.addEventListener('mousedown', handleMouseDown);
-        annotationCanvas.addEventListener('mousemove', handleMouseMove);
-        annotationCanvas.addEventListener('mouseup', handleMouseUp);
+            // Canvas event listeners
+            // Left-click (button 0): Draw polygons and edit vertices
+            // Right-click (button 2): Select annotations
+            annotationCanvas.addEventListener('mousedown', handleMouseDown);
+            annotationCanvas.addEventListener('mousemove', handleMouseMove);
+            annotationCanvas.addEventListener('mouseup', handleMouseUp);
 
-        // Prevent context menu on canvas when right-clicking for selection
-        annotationCanvas.addEventListener('contextmenu', e => e.preventDefault());
+            // Prevent context menu on canvas when right-clicking for selection
+            annotationCanvas.addEventListener('contextmenu', e => e.preventDefault());
+        }
 
         // Add keyboard event listener for Delete key to remove vertices
         document.addEventListener('keydown', handleKeyDown);
@@ -131,7 +182,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Store class colors if available
                 if (data.classColors) {
                     classColors = data.classColors;
+                } else {
+                    // Generate default colors if not available
+                    classColors = {};
+                    data.classes.forEach((className, index) => {
+                        classColors[index] = getColorForClass(index);
+                    });
                 }
+
+                // Update class selector with the loaded classes
+                updateClassSelector(data.classes);
             })
             .catch(error => {
                 console.error('Error loading project data:', error);
@@ -143,184 +203,46 @@ document.addEventListener('DOMContentLoaded', function() {
         // Connect to Socket.IO server
         socket = io();
 
-        // Listen for upload completed events
+        // Socket.IO event listener for upload_completed has been disabled
+        // This ensures users only see images available at the time the annotation page was opened
+        // Previously, this would add new images to the list when uploads were completed
+        /*
         socket.on('upload_completed', function(data) {
-            console.log('Upload completed:', data);
+            console.log('Upload completed (annotation page):', data);
 
-            // Update the pending upload status
-            if (pendingUploads[data.task_id]) {
-                pendingUploads[data.task_id].status = 'completed';
-                pendingUploads[data.task_id].progress = 100;
-                pendingUploads[data.task_id].image_info = data.image_info;
-
-                // Update the UI to show the completed upload
-                updateUploadProgress(data.task_id, 100, 'completed');
-
-                // Add the image to the list
-                if (data.image_info) {
-                    addImageToList(data.image_info);
-                }
-
-                // Remove from pending uploads after a delay
-                setTimeout(() => {
-                    delete pendingUploads[data.task_id];
-                    savePendingUploads();
-
-                    // Remove progress indicator
-                    const progressElement = document.getElementById(`upload-progress-${data.task_id}`);
-                    if (progressElement) {
-                        progressElement.remove();
-                    }
-                }, 3000);
+            // If we have image info, add the new image to the list
+            if (data.image_info) {
+                addImageToList(data.image_info);
             }
-
-            // Process next item in queue
-            processUploadQueue();
         });
-
-        // Listen for upload failed events
-        socket.on('upload_failed', function(data) {
-            console.error('Upload failed:', data);
-
-            // Update the pending upload status
-            if (pendingUploads[data.task_id]) {
-                pendingUploads[data.task_id].status = 'failed';
-                pendingUploads[data.task_id].error = data.error;
-
-                // Update the UI to show the failed upload
-                updateUploadProgress(data.task_id, 0, 'failed', data.error);
-
-                // Remove from pending uploads after a delay
-                setTimeout(() => {
-                    delete pendingUploads[data.task_id];
-                    savePendingUploads();
-                }, 5000);
-            }
-
-            // Process next item in queue
-            processUploadQueue();
-        });
+        */
     }
 
-    // Function to load pending uploads from localStorage
+    // Function to load pending uploads from localStorage - disabled to prevent interference with uploads in projects page
     function loadPendingUploads() {
-        try {
-            const savedUploads = localStorage.getItem(`pendingUploads_${projectId}`);
-            if (savedUploads) {
-                pendingUploads = JSON.parse(savedUploads);
-
-                // Check status of each pending upload
-                Object.keys(pendingUploads).forEach(taskId => {
-                    checkUploadStatus(taskId);
-                });
-            }
-        } catch (error) {
-            console.error('Error loading pending uploads:', error);
-        }
+        console.log('Pending uploads loading disabled in annotation page to prevent interference with uploads in projects page');
+        // We don't load or check pending uploads in the annotation page anymore
+        // This prevents interference with the upload process managed by the projects page
     }
 
-    // Function to save pending uploads to localStorage
+    // Function to save pending uploads to localStorage - disabled to prevent interference with uploads in projects page
     function savePendingUploads() {
-        try {
-            localStorage.setItem(`pendingUploads_${projectId}`, JSON.stringify(pendingUploads));
-        } catch (error) {
-            console.error('Error saving pending uploads:', error);
-        }
+        console.log('Pending uploads saving disabled in annotation page to prevent interference with uploads in projects page');
+        // We don't save pending uploads in the annotation page anymore
+        // This prevents interference with the upload process managed by the projects page
     }
 
-    // Function to check the status of an upload
+    // Function to check the status of an upload - disabled to prevent interference with uploads in projects page
     function checkUploadStatus(taskId) {
-        fetch(`/projects/${projectId}/upload/status/${taskId}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to get upload status');
-                }
-                return response.json();
-            })
-            .then(data => {
-                // Update the pending upload status
-                if (pendingUploads[taskId]) {
-                    pendingUploads[taskId].status = data.status;
-                    pendingUploads[taskId].progress = parseInt(data.progress);
-
-                    // Update the UI to show the current status
-                    updateUploadProgress(taskId, data.progress, data.status, data.error);
-
-                    // If completed, add the image to the list
-                    if (data.status === 'completed' && data.image_info) {
-                        addImageToList(data.image_info);
-
-                        // Remove from pending uploads after a delay
-                        setTimeout(() => {
-                            delete pendingUploads[taskId];
-                            savePendingUploads();
-
-                            // Remove progress indicator
-                            const progressElement = document.getElementById(`upload-progress-${taskId}`);
-                            if (progressElement) {
-                                progressElement.remove();
-                            }
-                        }, 3000);
-                    }
-
-                    // If still in progress, check again after a delay
-                    if (data.status === 'processing' || data.status === 'queued') {
-                        setTimeout(() => checkUploadStatus(taskId), 2000);
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Error checking upload status:', error);
-
-                // If we can't get the status, assume it failed
-                if (pendingUploads[taskId]) {
-                    pendingUploads[taskId].status = 'failed';
-                    pendingUploads[taskId].error = 'Failed to get upload status';
-
-                    // Update the UI to show the failed upload
-                    updateUploadProgress(taskId, 0, 'failed', 'Failed to get upload status');
-
-                    // Remove from pending uploads after a delay
-                    setTimeout(() => {
-                        delete pendingUploads[taskId];
-                        savePendingUploads();
-                    }, 5000);
-                }
-            });
+        console.log('Upload status checking disabled in annotation page to prevent interference with uploads in projects page');
+        // We don't check upload status in the annotation page anymore
+        // This prevents interference with the upload process managed by the projects page
     }
 
-    // Function to update the upload progress in the UI
+    // Function to update the upload progress in the UI (not used anymore - progress is shown on project card)
     function updateUploadProgress(taskId, progress, status, error) {
-        // Find or create progress element
-        let progressElement = document.getElementById(`upload-progress-${taskId}`);
-
-        if (!progressElement) {
-            // Create a new progress element
-            progressElement = document.createElement('div');
-            progressElement.id = `upload-progress-${taskId}`;
-            progressElement.className = 'alert alert-info upload-progress';
-            imageList.prepend(progressElement);
-        }
-
-        // Update the progress element based on status
-        if (status === 'completed') {
-            progressElement.className = 'alert alert-success upload-progress';
-            progressElement.innerHTML = `Upload completed: ${pendingUploads[taskId].filename}`;
-        } else if (status === 'failed') {
-            progressElement.className = 'alert alert-danger upload-progress';
-            progressElement.innerHTML = `Upload failed: ${pendingUploads[taskId].filename}<br>${error || ''}`;
-        } else {
-            progressElement.className = 'alert alert-info upload-progress';
-            progressElement.innerHTML = `
-                <div>${status === 'queued' ? 'Queued' : 'Uploading'}: ${pendingUploads[taskId].filename}</div>
-                <div class="progress mt-2">
-                    <div class="progress-bar" role="progressbar" style="width: ${progress}%" 
-                         aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100">
-                        ${progress}%
-                    </div>
-                </div>
-            `;
-        }
+        // This function is no longer used as the upload progress is now shown on the project card
+        console.log(`Upload progress: ${progress}%, status: ${status}, task: ${taskId}`);
     }
 
     // Function to add an image to the list
@@ -333,33 +255,23 @@ document.addEventListener('DOMContentLoaded', function() {
             localImages[existingIndex] = {
                 name: imageInfo.name,
                 element: localImages[existingIndex].element,
-                path: imageInfo.path,
-                thumbnail: imageInfo.thumbnail
+                path: imageInfo.path
             };
         } else {
             // Create image object
             const img = new Image();
 
-            // Set the source to the thumbnail for preview
-            if (imageInfo.thumbnail) {
-                img.src = imageInfo.thumbnail;
-            } else {
-                // If no thumbnail, try to load from the server path
-                const normalizedImageName = imageInfo.name.replace(/\\/g, '/');
-                img.src = `/projects/${projectId}/images/${encodeURIComponent(normalizedImageName)}`;
-            }
+            // Load from the server path
+            const normalizedImageName = imageInfo.name.replace(/\\/g, '/');
+            img.src = `/projects/${projectId}/images/${encodeURIComponent(normalizedImageName)}`;
 
             img.onload = function() {
                 // Add to local images array
                 localImages.push({
                     name: imageInfo.name,
                     element: img,
-                    path: imageInfo.path,
-                    thumbnail: imageInfo.thumbnail
+                    path: imageInfo.path
                 });
-
-                // Create image item in the list with preview
-                createImageListItem(imageInfo.name, imageInfo.thumbnail);
 
                 // Load the first image if none is loaded
                 if (!currentImage && localImages.length === 1) {
@@ -380,71 +292,175 @@ document.addEventListener('DOMContentLoaded', function() {
     // Keeping this comment for documentation purposes
 
     // Function to load saved images from server
+    // This function works with partially uploaded projects, allowing users to annotate images
+    // that have already been uploaded while others are still being uploaded
     function loadSavedImages() {
-        // Initialize the image counter to "Image 0 of 0"
-        updateImageCounter();
+        // Show loading indicator in the image counter with static "Image 1" and dynamic total count
+        imageCounter.innerHTML = 'Image 1 of 0 <div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>';
+
+        console.log(`[loadSavedImages] Starting to load images for project ${projectId}`);
 
         // Get saved images for this project from the server
         fetch(`/projects/${projectId}/images`)
-            .then(response => response.json())
+            .then(response => {
+                console.log(`[loadSavedImages] Server response status: ${response.status}`);
+                return response.json();
+            })
             .then(data => {
+                console.log(`[loadSavedImages] Received data:`, data);
+
                 if (data && data.images && data.images.length > 0) {
-                    // Always clear the image list to prevent duplication
-                    imageList.innerHTML = '';
+                    console.log(`[loadSavedImages] Found ${data.images.length} images`);
+
                     // Reset localImages array to prevent duplication
                     localImages = [];
 
+                    // Create a counter to track loaded images
+                    let loadedImagesCount = 0;
+                    const totalImages = data.images.length;
+
+                    // Update the image counter with static "Image 1" and initial total count
+                    imageCounter.innerHTML = `Image 1 of 0 <div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>`;
+
                     // Load each saved image
-                    data.images.forEach(savedImage => {
+                    data.images.forEach((savedImage, index) => {
+                        console.log(`[loadSavedImages] Processing image ${index + 1}/${totalImages}: ${savedImage.name}`);
+
                         // If we have a path, use it to load the image
                         if (savedImage.path) {
                             // Create image object
                             const img = new Image();
 
-                            // For security reasons, browsers don't allow direct access to local file paths
-                            // In a real application, you would need to use a file system API or server-side solution
-                            // For this demo, we'll use the thumbnail for display
-                            img.src = savedImage.thumbnail || '';
+                            // Load from the server path
+                            const normalizedImageName = savedImage.name.replace(/\\/g, '/');
+                            const imageSrc = `/projects/${projectId}/images/${encodeURIComponent(normalizedImageName)}`;
+                            console.log(`[loadSavedImages] Loading image from: ${imageSrc}`);
+
+                            // Add timestamp to prevent caching
+                            img.src = `${imageSrc}?t=${new Date().getTime()}`;
 
                             img.onload = function() {
+                                console.log(`[loadSavedImages] Successfully loaded image: ${savedImage.name}`);
+
                                 // Add to local images array
                                 localImages.push({
                                     name: savedImage.name,
                                     element: img,
-                                    path: savedImage.path,
-                                    thumbnail: savedImage.thumbnail
+                                    path: savedImage.path
                                 });
 
-                                // Create image item in the list with preview
-                                createImageListItem(savedImage.name, savedImage.thumbnail);
+                                // Increment the loaded images counter
+                                loadedImagesCount++;
+
+                                // Update the loading progress with static "Image 1" and dynamic total count
+                                imageCounter.innerHTML = `Image 1 of ${loadedImagesCount} <div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>`;
 
                                 // Load the first image if none is loaded
                                 if (!currentImage && localImages.length === 1) {
+                                    console.log(`[loadSavedImages] Loading first image: ${savedImage.name}`);
                                     loadLocalImage(savedImage.name);
+                                }
+
+                                // Update the image counter when all images are loaded
+                                if (loadedImagesCount === totalImages) {
+                                    console.log(`[loadSavedImages] All ${totalImages} images loaded successfully`);
+
+                                    // Initialize filtered images with all images
+                                    filteredImages = [...localImages];
+
+                                    // Update annotation status to categorize images
+                                    updateAnnotationStatus();
+
+                                    // Load the first image if there are images available
+                                    if (localImages.length > 0 && !currentImage) {
+                                        console.log(`[loadSavedImages] Loading first image after all images loaded: ${localImages[0].name}`);
+                                        loadLocalImage(localImages[0].name);
+                                    }
+
+                                    updateImageCounter();
+
+                                    // Periodic refresh has been disabled as per requirements
+                                    // Users will only see images that were available at the time the annotation page was opened
+                                    // setUpPeriodicImageRefresh();
                                 }
                             };
 
-                            // If image fails to load from path, use the thumbnail
+                            // If image fails to load
                             img.onerror = function() {
-                                console.warn(`Failed to load image from path: ${savedImage.path}`);
-                                if (savedImage.thumbnail) {
-                                    img.src = savedImage.thumbnail;
-                                }
+                                console.error(`[loadSavedImages] Failed to load image: ${savedImage.name} from path: ${savedImage.path}`);
+
+                                // Try again with a different approach
+                                console.log(`[loadSavedImages] Retrying with a different approach for: ${savedImage.name}`);
+                                const retryImg = new Image();
+                                const retryImageSrc = `/projects/${projectId}/images/${encodeURIComponent(normalizedImageName)}?retry=true&t=${new Date().getTime()}`;
+                                retryImg.src = retryImageSrc;
+
+                                retryImg.onload = function() {
+                                    console.log(`[loadSavedImages] Retry successful for image: ${savedImage.name}`);
+
+                                    // Add to local images array
+                                    localImages.push({
+                                        name: savedImage.name,
+                                        element: retryImg,
+                                        path: savedImage.path
+                                    });
+
+                                    // Increment the loaded images counter
+                                    loadedImagesCount++;
+
+                                    // Update the loading progress with static "Image 1" and dynamic total count
+                                    imageCounter.innerHTML = `Image 1 of ${loadedImagesCount} <div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>`;
+
+                                    // Load the first image if none is loaded
+                                    if (!currentImage && localImages.length === 1) {
+                                        loadLocalImage(savedImage.name);
+                                    }
+
+                                    // Update the image counter when all images are loaded
+                                    if (loadedImagesCount === totalImages) {
+                                        // Load the first image if there are images available
+                                        if (localImages.length > 0 && !currentImage) {
+                                            console.log(`[loadSavedImages] Loading first image after all images loaded (retry): ${localImages[0].name}`);
+                                            loadLocalImage(localImages[0].name);
+                                        }
+
+                                        updateImageCounter();
+                                    }
+                                };
+
+                                retryImg.onerror = function() {
+                                    console.error(`[loadSavedImages] Retry also failed for image: ${savedImage.name}`);
+
+                                    // Increment the loaded images counter even for failed images
+                                    loadedImagesCount++;
+
+                                    // Update the loading progress
+                                    imageCounter.innerHTML = `Loading images (${loadedImagesCount}/${totalImages})... <div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>`;
+
+                                    // Update the image counter when all images are loaded
+                                    if (loadedImagesCount === totalImages) {
+                                        updateImageCounter();
+                                    }
+                                };
                             };
+                        } else {
+                            console.warn(`[loadSavedImages] Image ${savedImage.name} has no path`);
+                            loadedImagesCount++;
                         }
                     });
 
-                    // Load the last active image if any
-                    if (data.lastActiveImage) {
-                        // We'll load this after a short delay to ensure images are loaded
-                        setTimeout(() => {
-                            loadLocalImage(data.lastActiveImage);
-                        }, 500);
-                    }
+                    // We'll now always load the first image when the page is opened
+                    // This is handled in the image loading completion code above
+                } else {
+                    console.log(`[loadSavedImages] No images found for project ${projectId}`);
+                    // No images found, update the counter
+                    updateImageCounter();
                 }
             })
             .catch(error => {
-                console.error('Error loading saved images:', error);
+                console.error(`[loadSavedImages] Error loading saved images:`, error);
+                // Update the image counter with error message
+                imageCounter.innerHTML = `Error loading images. Please try refreshing the page.`;
             });
     }
 
@@ -480,54 +496,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Function to create an image list item with preview
-    function createImageListItem(imageName, imageData) {
-        // Create image item container
-        const imageItem = document.createElement('div');
-        imageItem.className = 'image-item';
-        imageItem.dataset.name = imageName;
-        imageItem.title = imageName; // Add tooltip on hover
-
-        // Create preview thumbnail
-        const thumbnail = document.createElement('img');
-        thumbnail.src = imageData;
-        thumbnail.className = 'image-thumbnail';
-        thumbnail.alt = imageName;
-
-        // Create image name element
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = imageName;
-        nameSpan.className = 'image-name';
-
-        // Create delete button
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'btn btn-sm btn-danger delete-image-btn';
-        deleteBtn.innerHTML = '<i class="bi bi-trash"></i>';
-        deleteBtn.title = 'Delete image';
-
-        // Prevent the click event from bubbling up to the parent
-        deleteBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (confirm(`Are you sure you want to delete the image "${imageName}"?`)) {
-                deleteImage(imageName);
-            }
-        });
-
-        // Add elements to container
-        imageItem.appendChild(thumbnail);
-        imageItem.appendChild(nameSpan);
-        imageItem.appendChild(deleteBtn);
-
-        // Add click event for selecting the image
-        imageItem.addEventListener('click', () => loadLocalImage(imageName));
-
-        // Add to image list
-        imageList.appendChild(imageItem);
-
-        return imageItem;
-    }
-
-    // Function to delete an image
+    // Function to delete an image (no UI update needed since sidebar is removed)
     function deleteImage(imageName) {
         // Convert Windows backslashes to forward slashes for URL
         const normalizedImageName = imageName.replace(/\\/g, '/');
@@ -550,12 +519,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     localImages.splice(index, 1);
                 }
 
-                // Remove from image list in UI
-                const imageItem = document.querySelector(`.image-item[data-name="${imageName}"]`);
-                if (imageItem) {
-                    imageItem.remove();
-                }
-
                 // If this was the current image, clear it
                 if (currentImageName === imageName) {
                     currentImage = null;
@@ -574,7 +537,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     annotations = [];
                     updateAnnotationsList();
                 }
-
                 // If there are other images, load the first one
                 else if (localImages.length > 0) {
                     loadLocalImage(localImages[0].name);
@@ -597,29 +559,31 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Function to handle image upload
+
+    // Function to handle image upload (not used anymore - upload is done from project card)
     function handleImageUpload(event) {
         const files = event.target.files;
         if (files.length === 0) return;
 
-        // Clear the image list if it's showing the default message
-        if (imageList.querySelector('.alert:not(.upload-progress)')) {
-            imageList.querySelector('.alert:not(.upload-progress)').remove();
+        // Filter for image files only
+        const imageFiles = Array.from(files).filter(file => 
+            file.type.startsWith('image/') || 
+            /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(file.name)
+        );
+
+        if (imageFiles.length === 0) {
+            alert('No image files found in the selected files.');
+            return;
         }
 
         // Add files to the upload queue
-        addFilesToUploadQueue(files);
+        addFilesToUploadQueue(imageFiles);
     }
 
-    // Function to handle folder upload
+    // Function to handle folder upload (not used anymore - upload is done from project card)
     function handleFolderUpload(event) {
         const files = event.target.files;
         if (files.length === 0) return;
-
-        // Clear the image list if it's showing the default message
-        if (imageList.querySelector('.alert:not(.upload-progress)')) {
-            imageList.querySelector('.alert:not(.upload-progress)').remove();
-        }
 
         // Filter for image files only
         const imageFiles = Array.from(files).filter(file => 
@@ -932,23 +896,48 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Function to load a local image
     function loadLocalImage(imageName) {
+        console.log(`[loadLocalImage] Loading image: ${imageName}`);
+
         const imageData = localImages.find(img => img.name === imageName);
-        if (!imageData) return;
+        if (!imageData) {
+            console.error(`[loadLocalImage] Image not found in localImages array: ${imageName}`);
+            return;
+        }
+
+        console.log(`[loadLocalImage] Found image data:`, imageData);
 
         // Update current image name and element
         currentImageName = imageName;
         currentImageElement = imageData;
+
+        // If we already have a loaded element, use it directly
+        if (imageData.element && imageData.element.complete && imageData.element.naturalWidth !== 0) {
+            console.log(`[loadLocalImage] Using already loaded image element`);
+            currentImage = imageData.element;
+            displayImage();
+            loadAnnotations(imageName);
+            // Update the image counter display
+            updateImageCounter();
+            return;
+        }
 
         // Create a new image object to load from server
         const img = new Image();
 
         // Convert Windows backslashes to forward slashes for URL
         const normalizedImageName = imageName.replace(/\\/g, '/');
+        console.log(`[loadLocalImage] Normalized image name: ${normalizedImageName}`);
 
-        // Try to load from server using URL format (forward slashes)
-        img.src = `/projects/${projectId}/images/${encodeURIComponent(normalizedImageName)}`;
+        // Add timestamp to prevent caching
+        const timestamp = new Date().getTime();
+        const imageSrc = `/projects/${projectId}/images/${encodeURIComponent(normalizedImageName)}?t=${timestamp}`;
+        console.log(`[loadLocalImage] Loading image from: ${imageSrc}`);
+
+        // Try to load from server using URL format (forward slashes) with timestamp
+        img.src = imageSrc;
 
         img.onload = function() {
+            console.log(`[loadLocalImage] Successfully loaded image: ${imageName}`);
             // Update current image with the loaded image
             currentImage = img;
 
@@ -957,38 +946,80 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Load annotations for this image if any
             loadAnnotations(imageName);
+
+            // Update the image counter display
+            updateImageCounter();
         };
 
         img.onerror = function() {
-            console.error('Failed to load image from server:', imageName);
+            console.error(`[loadLocalImage] Failed to load image from server: ${imageName}`);
 
-            // Try an alternative approach with a timestamp to avoid caching issues
-            const timestamp = new Date().getTime();
-            img.src = `/projects/${projectId}/images/${encodeURIComponent(normalizedImageName)}?t=${timestamp}`;
+            // Try an alternative approach with different cache-busting parameters
+            const retryTimestamp = new Date().getTime();
+            const retrySrc = `/projects/${projectId}/images/${encodeURIComponent(normalizedImageName)}?nocache=true&t=${retryTimestamp}`;
+            console.log(`[loadLocalImage] Retrying with: ${retrySrc}`);
+
+            img.src = retrySrc;
 
             img.onload = function() {
+                console.log(`[loadLocalImage] Second attempt succeeded for: ${imageName}`);
                 // Update current image with the loaded image
                 currentImage = img;
                 displayImage();
                 loadAnnotations(imageName);
+
+                // Update the image counter display
+                updateImageCounter();
             };
 
             img.onerror = function() {
-                console.error('Second attempt failed to load image from server:', imageName);
+                console.error(`[loadLocalImage] Second attempt failed for: ${imageName}`);
 
-                // Fallback to thumbnail if available
-                if (imageData.thumbnail) {
-                    const thumbImg = new Image();
-                    thumbImg.src = imageData.thumbnail;
+                // Try a third approach with a different URL format
+                const thirdAttemptSrc = `/projects/${projectId}/images/${encodeURIComponent(normalizedImageName)}?retry=third&t=${new Date().getTime()}`;
+                console.log(`[loadLocalImage] Third attempt with: ${thirdAttemptSrc}`);
 
-                    thumbImg.onload = function() {
-                        currentImage = thumbImg;
-                        displayImage();
-                        loadAnnotations(imageName);
-                    };
-                } else {
-                    alert('Failed to load image: ' + imageName);
-                }
+                const thirdImg = new Image();
+                thirdImg.src = thirdAttemptSrc;
+
+                thirdImg.onload = function() {
+                    console.log(`[loadLocalImage] Third attempt succeeded for: ${imageName}`);
+                    currentImage = thirdImg;
+                    displayImage();
+                    loadAnnotations(imageName);
+
+                    // Update the image counter display
+                    updateImageCounter();
+                };
+
+                thirdImg.onerror = function() {
+                    console.error(`[loadLocalImage] Third attempt failed for: ${imageName}`);
+
+                    // Fallback to thumbnail if available
+                    if (imageData.thumbnail) {
+                        console.log(`[loadLocalImage] Trying thumbnail for: ${imageName}`);
+                        const thumbImg = new Image();
+                        thumbImg.src = imageData.thumbnail;
+
+                        thumbImg.onload = function() {
+                            console.log(`[loadLocalImage] Thumbnail loaded for: ${imageName}`);
+                            currentImage = thumbImg;
+                            displayImage();
+                            loadAnnotations(imageName);
+
+                            // Update the image counter display
+                            updateImageCounter();
+                        };
+
+                        thumbImg.onerror = function() {
+                            console.error(`[loadLocalImage] Thumbnail also failed for: ${imageName}`);
+                            alert('Failed to load image: ' + imageName);
+                        };
+                    } else {
+                        console.error(`[loadLocalImage] No thumbnail available for: ${imageName}`);
+                        alert('Failed to load image: ' + imageName);
+                    }
+                };
             };
         };
 
@@ -1079,11 +1110,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Function to display the current image
     function displayImage() {
+        console.log(`[displayImage] Displaying image:`, currentImage);
+
         if (!currentImage) {
+            console.warn(`[displayImage] No current image to display`);
             noImageMessage.style.display = 'block';
             canvasContainer.style.display = 'none';
             return;
         }
+
+        // Check if the image is fully loaded
+        if (!currentImage.complete || currentImage.naturalWidth === 0) {
+            console.warn(`[displayImage] Image not fully loaded yet:`, currentImage);
+            // We'll show a loading message instead of the "no image" message
+            noImageMessage.style.display = 'block';
+            noImageMessage.innerHTML = 'Loading image... Please wait.';
+            canvasContainer.style.display = 'none';
+
+            // Wait for the image to load
+            currentImage.onload = function() {
+                console.log(`[displayImage] Image now loaded, displaying`);
+                displayImage(); // Call this function again once loaded
+            };
+            return;
+        }
+
+        console.log(`[displayImage] Image dimensions: ${currentImage.width}x${currentImage.height}`);
 
         noImageMessage.style.display = 'none';
         canvasContainer.style.display = 'block';
@@ -1092,17 +1144,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const containerWidth = canvasContainer.parentElement.clientWidth;
         const containerHeight = canvasContainer.parentElement.clientHeight;
 
+        console.log(`[displayImage] Container dimensions: ${containerWidth}x${containerHeight}`);
+
         // Only calculate initial scale if it hasn't been set by zoom
         if (scale === 1) {
             // Calculate scale to fit image in container while maintaining aspect ratio
             const scaleX = containerWidth / currentImage.width;
             const scaleY = containerHeight / currentImage.height;
             scale = Math.min(scaleX, scaleY, 1); // Don't scale up images that are smaller than the container
+            console.log(`[displayImage] Calculated scale: ${scale}`);
         }
 
         // Set canvas dimensions based on current scale
         const scaledWidth = currentImage.width * scale;
         const scaledHeight = currentImage.height * scale;
+
+        console.log(`[displayImage] Scaled dimensions: ${scaledWidth}x${scaledHeight}`);
 
         imageCanvas.width = scaledWidth;
         imageCanvas.height = scaledHeight;
@@ -1114,9 +1171,19 @@ document.addEventListener('DOMContentLoaded', function() {
         canvasContainer.style.height = `${scaledHeight}px`;
         canvasContainer.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
 
-        // Draw image
-        ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
-        ctx.drawImage(currentImage, 0, 0, scaledWidth, scaledHeight);
+        try {
+            // Draw image
+            ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+            ctx.drawImage(currentImage, 0, 0, scaledWidth, scaledHeight);
+            console.log(`[displayImage] Image drawn successfully`);
+        } catch (error) {
+            console.error(`[displayImage] Error drawing image:`, error);
+            // Show error message
+            noImageMessage.style.display = 'block';
+            noImageMessage.innerHTML = 'Error displaying image. Please try refreshing the page.';
+            canvasContainer.style.display = 'none';
+            return;
+        }
 
         // Draw annotations
         drawAnnotations();
@@ -1371,6 +1438,20 @@ document.addEventListener('DOMContentLoaded', function() {
             // Start new annotation
             isDrawing = true;
 
+            // Check if there's a background annotation and remove it without confirmation
+            const hasBackgroundAnnotation = annotations.some(annotation => annotation.type === 'background');
+            if (hasBackgroundAnnotation) {
+                // Remove the background annotation
+                annotations = annotations.filter(annotation => annotation.type !== 'background');
+                console.log('Background annotation removed automatically');
+
+                // Update the canvas to reflect the changes
+                drawAnnotations();
+
+                // Save the updated annotations
+                saveAnnotations();
+            }
+
             if (currentTool === 'polygon') {
                 if (!currentAnnotation) {
                     // Start new polygon
@@ -1563,6 +1644,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateAnnotationsList() {
         const annotationsList = document.getElementById('annotationsList');
 
+        // If the annotationsList element doesn't exist, return early
+        if (!annotationsList) {
+            return;
+        }
+
         // Clear the list
         annotationsList.innerHTML = '';
 
@@ -1584,6 +1670,54 @@ document.addEventListener('DOMContentLoaded', function() {
             const typeBadge = document.createElement('span');
             typeBadge.className = `annotation-type ${annotation.type}`;
             typeBadge.textContent = annotation.type.charAt(0).toUpperCase() + annotation.type.slice(1);
+
+            // Special handling for background annotations
+            if (annotation.type === 'background') {
+                // Create a special item for background annotations
+                item.innerHTML = '';
+                item.className = 'annotation-item background-annotation';
+
+                // Add a special badge
+                const backgroundBadge = document.createElement('span');
+                backgroundBadge.className = 'annotation-type background';
+                backgroundBadge.textContent = 'Background';
+
+                // Add a description
+                const description = document.createElement('span');
+                description.className = 'annotation-description';
+                description.textContent = 'No objects in this image';
+
+                // Add delete button
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'btn btn-sm btn-danger delete-annotation-btn';
+                deleteBtn.innerHTML = '<i class="bi bi-trash"></i>';
+                deleteBtn.title = 'Delete annotation';
+
+                // Prevent the click event from bubbling up to the parent
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    // Set this annotation as the selected one
+                    selectedAnnotation = annotation;
+                    // Delete it
+                    deleteSelectedAnnotation();
+                });
+
+                // Add elements to item
+                item.appendChild(backgroundBadge);
+                item.appendChild(description);
+                item.appendChild(deleteBtn);
+
+                // Add click event to select the annotation
+                item.addEventListener('click', () => {
+                    selectedAnnotation = annotation;
+                    selectedVertex = null;
+                    isDraggingVertex = false;
+                    drawAnnotations();
+                });
+
+                annotationsList.appendChild(item);
+                return; // Skip the rest of the processing for this annotation
+            }
 
             // Add color indicator with color picker functionality
             const colorIndicator = document.createElement('span');
@@ -1827,6 +1961,24 @@ document.addEventListener('DOMContentLoaded', function() {
         // Draw existing annotations
         annotations.forEach(annotation => {
             const isSelected = annotation === selectedAnnotation;
+
+            // Handle background annotation type
+            if (annotation.type === 'background') {
+                // Display a message on the canvas indicating this is a background image
+                annotCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                annotCtx.font = 'bold 24px Arial';
+                annotCtx.textAlign = 'center';
+                annotCtx.fillText('Background Image (No Objects)', annotationCanvas.width / 2, 30);
+
+                // Add a subtle border to indicate it's annotated
+                annotCtx.strokeStyle = 'rgba(0, 200, 0, 0.5)';
+                annotCtx.lineWidth = 4;
+                annotCtx.strokeRect(10, 10, annotationCanvas.width - 20, annotationCanvas.height - 20);
+
+                // Update the annotations list
+                updateAnnotationsList();
+                return; // Skip the rest of the drawing for this annotation
+            }
 
             // Set color based on class
             const classIndex = annotation.class % projectClasses.length;
@@ -2095,8 +2247,31 @@ document.addEventListener('DOMContentLoaded', function() {
             const option = document.createElement('option');
             option.value = index;
             option.textContent = className;
+
+            // Apply class color as background color
+            const color = classColors[index] || getColorForClass(index);
+            option.style.backgroundColor = color;
+
+            // Set text color to white or black based on background color brightness
+            const rgb = hexToRgb(color);
+            const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
+            option.style.color = brightness > 128 ? 'black' : 'white';
+
             classSelect.appendChild(option);
         });
+    }
+
+    // Helper function to convert hex color to RGB
+    function hexToRgb(hex) {
+        // Remove # if present
+        hex = hex.replace('#', '');
+
+        // Parse the hex values
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+
+        return { r, g, b };
     }
 
     // Function to load annotations for an image
@@ -2251,51 +2426,311 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Function to navigate to the previous image
     function navigateToPreviousImage() {
-        if (!localImages.length || !currentImageName) return;
+        if (!filteredImages.length || !currentImageName) return;
 
-        // Find the index of the current image
-        const currentIndex = localImages.findIndex(img => img.name === currentImageName);
+        // Find the index of the current image in the filtered images
+        const currentIndex = filteredImages.findIndex(img => img.name === currentImageName);
         if (currentIndex === -1) return;
 
         // Calculate the index of the previous image (with wrap-around)
-        const prevIndex = (currentIndex - 1 + localImages.length) % localImages.length;
+        const prevIndex = (currentIndex - 1 + filteredImages.length) % filteredImages.length;
 
-        // Load the previous image
-        loadLocalImage(localImages[prevIndex].name);
+        // Update the annotation status to ensure counts are up-to-date
+        updateAnnotationStatus().then(() => {
+            // Load the previous image
+            loadLocalImage(filteredImages[prevIndex].name);
+        });
     }
 
     // Function to navigate to the next image
     function navigateToNextImage() {
-        if (!localImages.length || !currentImageName) return;
+        if (!filteredImages.length || !currentImageName) return;
 
-        // Find the index of the current image
-        const currentIndex = localImages.findIndex(img => img.name === currentImageName);
+        // Find the index of the current image in the filtered images
+        const currentIndex = filteredImages.findIndex(img => img.name === currentImageName);
         if (currentIndex === -1) return;
 
         // Calculate the index of the next image (with wrap-around)
-        const nextIndex = (currentIndex + 1) % localImages.length;
+        const nextIndex = (currentIndex + 1) % filteredImages.length;
 
-        // Load the next image
-        loadLocalImage(localImages[nextIndex].name);
+        // Update the annotation status to ensure counts are up-to-date
+        updateAnnotationStatus().then(() => {
+            // Load the next image
+            loadLocalImage(filteredImages[nextIndex].name);
+        });
+    }
+
+    // Function to switch between image filters
+    function switchTab(tabId) {
+        // Update current tab
+        currentTab = tabId;
+
+        // Update active state of toggle buttons
+        document.getElementById('all-images-tab').classList.remove('active');
+        document.getElementById('annotated-images-tab').classList.remove('active');
+        document.getElementById('unannotated-images-tab').classList.remove('active');
+        document.getElementById('background-images-tab').classList.remove('active');
+        document.getElementById(tabId + '-tab').classList.add('active');
+
+        // Update the annotation status to ensure counts are up-to-date
+        // and wait for it to complete before continuing
+        updateAnnotationStatus().then(() => {
+            // Filter images based on the selected tab is now handled by updateAnnotationStatus
+
+            // Update toggle button text with image counts
+            updateTabCounts();
+
+            // If there are filtered images, load the first one
+            if (filteredImages.length > 0) {
+                loadLocalImage(filteredImages[0].name);
+            } else {
+                // If no images in the current filter, show a message
+                clearCanvas();
+                noImageMessage.style.display = 'block';
+                noImageMessage.textContent = 'No images in the current filter. Switch to a different filter or add more images.';
+            }
+        });
+    }
+
+    // Function to update toggle button text with image counts
+    function updateTabCounts() {
+        // Update the toggle button text with the count of images in each category
+        document.getElementById('all-images-tab').textContent = `All Images (${localImages.length})`;
+        document.getElementById('annotated-images-tab').textContent = `Annotated Images (${annotatedImages.length})`;
+        document.getElementById('unannotated-images-tab').textContent = `Images without Annotations (${unannotatedImages.length})`;
+        document.getElementById('background-images-tab').textContent = `Background (${backgroundImages.length})`;
+    }
+
+    // Function to filter images based on the current tab
+    function filterImages() {
+        // Filter images based on the current tab
+        if (currentTab === 'all-images') {
+            filteredImages = [...localImages];
+        } else if (currentTab === 'annotated-images') {
+            filteredImages = [...annotatedImages];
+        } else if (currentTab === 'unannotated-images') {
+            filteredImages = [...unannotatedImages];
+        } else if (currentTab === 'background-images') {
+            filteredImages = [...backgroundImages];
+        }
+
+        // Update the image counter
+        updateImageCounter();
+
+        // Update tab counts
+        updateTabCounts();
+    }
+
+    // Function to update the annotation status of all images
+    function updateAnnotationStatus() {
+        // Clear the arrays
+        annotatedImages = [];
+        unannotatedImages = [];
+        backgroundImages = [];
+
+        // Create an array of promises for checking each image
+        const promises = localImages.map(image => {
+            return checkImageAnnotationStatus(image.name)
+                .then(result => {
+                    if (result.hasAnnotations) {
+                        annotatedImages.push(image);
+
+                        // If it has a background annotation, add to background images array
+                        if (result.hasBackgroundAnnotation) {
+                            backgroundImages.push(image);
+                        }
+                    } else {
+                        unannotatedImages.push(image);
+                    }
+                    return result;
+                });
+        });
+
+        // Return the promise so callers can wait for it to complete
+        return Promise.all(promises).then(() => {
+            // Update the filtered images based on the current tab
+            filterImages();
+
+            // Log the counts for debugging
+            console.log(`Annotation status updated: ${annotatedImages.length} annotated, ${unannotatedImages.length} unannotated, ${backgroundImages.length} background`);
+        });
+    }
+
+    // Function to check if an image has annotations
+    function checkImageAnnotationStatus(imageName) {
+        return new Promise((resolve) => {
+            // Convert Windows backslashes to forward slashes for URL
+            const normalizedImageName = imageName.replace(/\\/g, '/');
+
+            // Try to load annotations from server
+            fetch(`/projects/${projectId}/annotations/${encodeURIComponent(normalizedImageName)}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Check if there are any annotations
+                    const hasAnnotations = data && data.length > 0;
+
+                    // Check if there's a background annotation
+                    const hasBackgroundAnnotation = hasAnnotations && data.some(annotation => annotation.type === 'background');
+
+                    // Resolve with an object containing both flags
+                    resolve({
+                        hasAnnotations,
+                        hasBackgroundAnnotation
+                    });
+                })
+                .catch(error => {
+                    console.error('Error checking annotation status:', error);
+                    // If there's an error, assume no annotations
+                    resolve({
+                        hasAnnotations: false,
+                        hasBackgroundAnnotation: false
+                    });
+                });
+        });
+    }
+
+    // Function to mark the current image as background (no objects)
+    function markAsBackground() {
+        if (!currentImageName) {
+            alert('No image selected');
+            return;
+        }
+
+        // Check if there are any non-background annotations
+        const hasNonBackgroundAnnotations = annotations.some(annotation => annotation.type !== "background");
+
+        // If there are non-background annotations, show a warning
+        if (hasNonBackgroundAnnotations) {
+            if (!confirm('Warning: This will delete all existing annotations for this image. Do you want to continue?')) {
+                return; // User cancelled
+            }
+        }
+
+        // Create a background annotation
+        const backgroundAnnotation = [{
+            "type": "background",
+            "class": null,
+            "points": []
+        }];
+
+        // Set the annotations array
+        annotations = backgroundAnnotation;
+
+        // Save the annotations
+        saveAnnotations();
+
+        // Draw the background annotation on the canvas
+        drawAnnotations();
+
+        // Update the annotation status and wait for it to complete
+        updateAnnotationStatus().then(() => {
+            // After annotation status is updated, filter images again to ensure
+            // the current image appears in the correct filter
+            filterImages();
+        });
+    }
+
+    // Function to clear the canvas
+    function clearCanvas() {
+        // Clear the annotation canvas
+        annotCtx.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
+
+        // Clear the image canvas
+        ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+
+        // Hide the canvas container
+        canvasContainer.style.display = 'none';
     }
 
     // Function to update the image counter display
     function updateImageCounter() {
-        if (!localImages.length) {
+        if (!filteredImages.length) {
             imageCounter.textContent = 'Image 0 of 0';
             return;
         }
 
-        // Find the index of the current image
-        const currentIndex = localImages.findIndex(img => img.name === currentImageName);
+        // Find the index of the current image in the filtered images
+        const currentIndex = filteredImages.findIndex(img => img.name === currentImageName);
         if (currentIndex === -1) {
-            imageCounter.textContent = 'Image 0 of ' + localImages.length;
+            imageCounter.textContent = 'Image 0 of ' + filteredImages.length;
             return;
         }
 
         // Display 1-based index for better user experience
         const displayIndex = currentIndex + 1;
-        imageCounter.textContent = 'Image ' + displayIndex + ' of ' + localImages.length;
+        imageCounter.textContent = 'Image ' + displayIndex + ' of ' + filteredImages.length;
+    }
+
+    // Function to set up periodic refresh to check for new images
+    // This allows the annotation page to see new images as they're uploaded
+    let imageRefreshInterval = null;
+    function setUpPeriodicImageRefresh() {
+        // Clear any existing interval
+        if (imageRefreshInterval) {
+            clearInterval(imageRefreshInterval);
+        }
+
+        // Set up a new interval to check for new images every 30 seconds
+        imageRefreshInterval = setInterval(() => {
+            console.log('Checking for new images...');
+
+            // Get the current list of images
+            fetch(`/projects/${projectId}/images`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.images && data.images.length > 0) {
+                        // Check if there are new images
+                        const currentImageCount = localImages.length;
+                        const newImageCount = data.images.length;
+
+                        if (newImageCount > currentImageCount) {
+                            console.log(`Found ${newImageCount - currentImageCount} new images. Refreshing...`);
+
+                            // Process only the new images
+                            const existingImageNames = localImages.map(img => img.name);
+                            const newImages = data.images.filter(img => !existingImageNames.includes(img.name));
+
+                            // Load each new image
+                            newImages.forEach(savedImage => {
+                                if (savedImage.path) {
+                                    // Create image object
+                                    const img = new Image();
+
+                                    // Load from the server path
+                                    const normalizedImageName = savedImage.name.replace(/\\/g, '/');
+                                    const imageSrc = `/projects/${projectId}/images/${encodeURIComponent(normalizedImageName)}`;
+
+                                    // Add timestamp to prevent caching
+                                    img.src = `${imageSrc}?t=${new Date().getTime()}`;
+
+                                    img.onload = function() {
+                                        console.log(`Successfully loaded new image: ${savedImage.name}`);
+
+                                        // Add to local images array
+                                        localImages.push({
+                                            name: savedImage.name,
+                                            element: img,
+                                            path: savedImage.path
+                                        });
+
+                                        // Update the image counter
+                                        updateImageCounter();
+                                    };
+
+                                    img.onerror = function() {
+                                        console.error(`Failed to load new image: ${savedImage.name}`);
+                                    };
+                                }
+                            });
+                        } else {
+                            console.log('No new images found.');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking for new images:', error);
+                });
+        }, 30000); // Check every 30 seconds
     }
 
     // Handle window resize
