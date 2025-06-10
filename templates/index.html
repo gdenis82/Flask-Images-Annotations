@@ -29,6 +29,10 @@
                     No projects found. Create a new project to get started.
                 </div>
 
+                <!-- Hidden file inputs for uploads -->
+                <input type="file" id="projectImageUpload" accept=".jpg,.jpeg,.png,.gif,.bmp,.webp" multiple style="display: none;">
+                <input type="file" id="projectFolderUpload" webkitdirectory directory multiple style="display: none;">
+
                 <div class="row" id="projectsList">
                     <!-- Projects will be loaded here dynamically -->
                 </div>
@@ -80,6 +84,25 @@
                         <small class="text-muted project-date"></small>
                     </p>
                     <p class="card-text project-classes"></p>
+                    <div class="upload-controls mb-3">
+                        <div class="dropdown me-3">
+                            <button class="btn btn-outline-primary dropdown-toggle" type="button" id="imageManagementDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-images"></i> Images
+                            </button>
+                            <ul class="dropdown-menu" aria-labelledby="imageManagementDropdown">
+                                <li><a class="dropdown-item upload-images" href="#"><i class="bi bi-upload"></i> Add Images</a></li>
+                                <li><a class="dropdown-item upload-folder" href="#"><i class="bi bi-folder-plus"></i> Add Folder</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger delete-all-images" href="#"><i class="bi bi-trash"></i> Delete All Images</a></li>
+                            </ul>
+                        </div>
+                        <div class="upload-progress-container" style="display: none; margin-top: 5px;">
+                            <div class="progress mb-2">
+                                <div class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                            </div>
+                            <div class="upload-status small text-muted">Preparing upload...</div>
+                        </div>
+                    </div>
                     <div class="d-flex justify-content-between">
                         <a href="#" class="btn btn-primary open-project">Open</a>
                         <div>
@@ -140,6 +163,8 @@
     </template>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('serve_socketio_client') }}"></script>
+    <script src="{{ url_for('static', filename='js/indexedDB.js') }}"></script>
     <script src="{{ url_for('static', filename='js/projects.js') }}"></script>
 </body>
 </html>
