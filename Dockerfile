@@ -1,4 +1,5 @@
-FROM python:3.10.0-slim
+FROM python:3.10-slim-bullseye
+
 
 WORKDIR /app
 
@@ -8,11 +9,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     iputils-ping \
     dnsutils \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt
+
 
 # Install gunicorn
 RUN pip install --no-cache-dir gunicorn
@@ -20,8 +23,13 @@ RUN pip install --no-cache-dir gunicorn
 # Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p projects/temp && chmod -R 777 projects
+# Create non-root user
+RUN groupadd -g 1000 appuser && \
+    useradd -u 1000 -g 1000 -s /bin/bash -m appuser
+
+# Create necessary directories with appropriate permissions
+RUN mkdir -p projects/temp && chmod -R 777 projects && \
+    chown -R appuser:appuser /app
 
 # Download Socket.IO client library
 RUN chmod +x download_socketio.sh && ./download_socketio.sh
@@ -34,4 +42,6 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 5000
 
 # Command to run the application with gunicorn
-CMD ["gunicorn", "--worker-class", "eventlet", "--workers", "1", "--bind", "0.0.0.0:5000", "app:app"]
+# Use a formula based on CPU cores: (2 * CPU cores) + 1
+# For most environments, 4 workers is a good starting point
+CMD ["gunicorn", "--worker-class", "eventlet", "--workers", "1", "--bind", "0.0.0.0:5000", "--log-level", "info", "app:app"]
