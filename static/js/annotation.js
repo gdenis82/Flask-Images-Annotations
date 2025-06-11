@@ -200,8 +200,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Function to initialize Socket.IO connection
     function initSocketConnection() {
-        // Connect to Socket.IO server
-        socket = io();
+        // Connect to Socket.IO server with reconnection options
+        // Using the same options as in projects.js to ensure compatibility
+        socket = io({
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000
+        });
 
         // Socket.IO event listener for upload_completed has been disabled
         // This ensures users only see images available at the time the annotation page was opened
@@ -1135,58 +1142,64 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        console.log(`[displayImage] Image dimensions: ${currentImage.width}x${currentImage.height}`);
+        // Use requestAnimationFrame to defer drawing operations to the next frame
+        // This helps prevent blocking the main thread during heavy operations
+        requestAnimationFrame(() => {
+            console.log(`[displayImage] Image dimensions: ${currentImage.width}x${currentImage.height}`);
 
-        noImageMessage.style.display = 'none';
-        canvasContainer.style.display = 'block';
+            noImageMessage.style.display = 'none';
+            canvasContainer.style.display = 'block';
 
-        // Set canvas dimensions to match image
-        const containerWidth = canvasContainer.parentElement.clientWidth;
-        const containerHeight = canvasContainer.parentElement.clientHeight;
+            // Set canvas dimensions to match image
+            const containerWidth = canvasContainer.parentElement.clientWidth;
+            const containerHeight = canvasContainer.parentElement.clientHeight;
 
-        console.log(`[displayImage] Container dimensions: ${containerWidth}x${containerHeight}`);
+            console.log(`[displayImage] Container dimensions: ${containerWidth}x${containerHeight}`);
 
-        // Only calculate initial scale if it hasn't been set by zoom
-        if (scale === 1) {
-            // Calculate scale to fit image in container while maintaining aspect ratio
-            const scaleX = containerWidth / currentImage.width;
-            const scaleY = containerHeight / currentImage.height;
-            scale = Math.min(scaleX, scaleY, 1); // Don't scale up images that are smaller than the container
-            console.log(`[displayImage] Calculated scale: ${scale}`);
-        }
+            // Only calculate initial scale if it hasn't been set by zoom
+            if (scale === 1) {
+                // Calculate scale to fit image in container while maintaining aspect ratio
+                const scaleX = containerWidth / currentImage.width;
+                const scaleY = containerHeight / currentImage.height;
+                scale = Math.min(scaleX, scaleY, 1); // Don't scale up images that are smaller than the container
+                console.log(`[displayImage] Calculated scale: ${scale}`);
+            }
 
-        // Set canvas dimensions based on current scale
-        const scaledWidth = currentImage.width * scale;
-        const scaledHeight = currentImage.height * scale;
+            // Set canvas dimensions based on current scale
+            const scaledWidth = currentImage.width * scale;
+            const scaledHeight = currentImage.height * scale;
 
-        console.log(`[displayImage] Scaled dimensions: ${scaledWidth}x${scaledHeight}`);
+            console.log(`[displayImage] Scaled dimensions: ${scaledWidth}x${scaledHeight}`);
 
-        imageCanvas.width = scaledWidth;
-        imageCanvas.height = scaledHeight;
-        annotationCanvas.width = scaledWidth;
-        annotationCanvas.height = scaledHeight;
+            imageCanvas.width = scaledWidth;
+            imageCanvas.height = scaledHeight;
+            annotationCanvas.width = scaledWidth;
+            annotationCanvas.height = scaledHeight;
 
-        // Center canvas in container and apply offset for panning
-        canvasContainer.style.width = `${scaledWidth}px`;
-        canvasContainer.style.height = `${scaledHeight}px`;
-        canvasContainer.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+            // Center canvas in container and apply offset for panning
+            canvasContainer.style.width = `${scaledWidth}px`;
+            canvasContainer.style.height = `${scaledHeight}px`;
+            canvasContainer.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
 
-        try {
-            // Draw image
-            ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
-            ctx.drawImage(currentImage, 0, 0, scaledWidth, scaledHeight);
-            console.log(`[displayImage] Image drawn successfully`);
-        } catch (error) {
-            console.error(`[displayImage] Error drawing image:`, error);
-            // Show error message
-            noImageMessage.style.display = 'block';
-            noImageMessage.innerHTML = 'Error displaying image. Please try refreshing the page.';
-            canvasContainer.style.display = 'none';
-            return;
-        }
+            try {
+                // Draw image
+                ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+                ctx.drawImage(currentImage, 0, 0, scaledWidth, scaledHeight);
+                console.log(`[displayImage] Image drawn successfully`);
+            } catch (error) {
+                console.error(`[displayImage] Error drawing image:`, error);
+                // Show error message
+                noImageMessage.style.display = 'block';
+                noImageMessage.innerHTML = 'Error displaying image. Please try refreshing the page.';
+                canvasContainer.style.display = 'none';
+                return;
+            }
 
-        // Draw annotations
-        drawAnnotations();
+            // Draw annotations in the next frame to further reduce main thread blocking
+            requestAnimationFrame(() => {
+                drawAnnotations();
+            });
+        });
     }
 
     // Function to set the current tool
@@ -2276,29 +2289,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Function to load annotations for an image
     function loadAnnotations(imageName) {
-        // Clear current annotations
-        annotations = [];
-        selectedAnnotation = null;
-        selectedVertex = null;
+        // Use setTimeout to defer annotation loading to the next tick of the event loop
+        // This prevents blocking the main thread during heavy operations
+        setTimeout(() => {
+            // Clear current annotations
+            annotations = [];
+            selectedAnnotation = null;
+            selectedVertex = null;
 
-        // Convert Windows backslashes to forward slashes for URL
-        const normalizedImageName = imageName.replace(/\\/g, '/');
+            // Convert Windows backslashes to forward slashes for URL
+            const normalizedImageName = imageName.replace(/\\/g, '/');
 
-        // Try to load from server
-        fetch(`/projects/${projectId}/annotations/${encodeURIComponent(normalizedImageName)}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data && data.length > 0) {
-                    annotations = data;
-                }
-                // Always redraw annotations (or clear the canvas if no annotations)
-                drawAnnotations();
-            })
-            .catch(error => {
-                console.error('Error loading annotations:', error);
-                // In case of error, still clear and redraw
-                drawAnnotations();
-            });
+            // Try to load from server
+            fetch(`/projects/${projectId}/annotations/${encodeURIComponent(normalizedImageName)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        annotations = data;
+                    }
+                    // Always redraw annotations (or clear the canvas if no annotations)
+                    drawAnnotations();
+                })
+                .catch(error => {
+                    console.error('Error loading annotations:', error);
+                    // In case of error, still clear and redraw
+                    drawAnnotations();
+                });
+        }, 0);
     }
 
     // Function to save annotations
@@ -2424,44 +2441,102 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Function to navigate to the previous image
+    // Function to navigate to the previous image using AJAX
     function navigateToPreviousImage() {
-        if (!filteredImages.length || !currentImageName) return;
+        if (!currentImageName) return;
 
-        // Find the index of the current image in the filtered images
-        const currentIndex = filteredImages.findIndex(img => img.name === currentImageName);
-        if (currentIndex === -1) return;
+        // Show loading indicator
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.className = 'loading-indicator';
+        loadingIndicator.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div> Loading previous image...';
+        document.querySelector('.main-content').appendChild(loadingIndicator);
 
-        // Calculate the index of the previous image (with wrap-around)
-        const prevIndex = (currentIndex - 1 + filteredImages.length) % filteredImages.length;
+        // Use AJAX to get the previous image from the server
+        fetch(`/projects/${projectId}/navigate_image?current_image=${encodeURIComponent(currentImageName)}&direction=previous&tab=${currentTab}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to navigate to previous image');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Remove loading indicator
+                if (loadingIndicator.parentNode) {
+                    loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
 
-        // Update the annotation status to ensure counts are up-to-date
-        updateAnnotationStatus().then(() => {
-            // Load the previous image
-            loadLocalImage(filteredImages[prevIndex].name);
-        });
+                // If we have an image, load it
+                if (data.image) {
+                    loadLocalImage(data.image.name);
+                } else {
+                    console.error('No image returned from server');
+                }
+            })
+            .catch(error => {
+                console.error('Error navigating to previous image:', error);
+
+                // Remove loading indicator
+                if (loadingIndicator.parentNode) {
+                    loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
+
+                // Show error message
+                alert('Failed to navigate to previous image. Please try again.');
+            });
     }
 
-    // Function to navigate to the next image
+    // Function to navigate to the next image using AJAX
     function navigateToNextImage() {
-        if (!filteredImages.length || !currentImageName) return;
+        if (!currentImageName) return;
 
-        // Find the index of the current image in the filtered images
-        const currentIndex = filteredImages.findIndex(img => img.name === currentImageName);
-        if (currentIndex === -1) return;
+        // Show loading indicator
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.className = 'loading-indicator';
+        loadingIndicator.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div> Loading next image...';
+        document.querySelector('.main-content').appendChild(loadingIndicator);
 
-        // Calculate the index of the next image (with wrap-around)
-        const nextIndex = (currentIndex + 1) % filteredImages.length;
+        // Use AJAX to get the next image from the server
+        fetch(`/projects/${projectId}/navigate_image?current_image=${encodeURIComponent(currentImageName)}&direction=next&tab=${currentTab}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to navigate to next image');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Remove loading indicator
+                if (loadingIndicator.parentNode) {
+                    loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
 
-        // Update the annotation status to ensure counts are up-to-date
-        updateAnnotationStatus().then(() => {
-            // Load the next image
-            loadLocalImage(filteredImages[nextIndex].name);
-        });
+                // If we have an image, load it
+                if (data.image) {
+                    loadLocalImage(data.image.name);
+                } else {
+                    console.error('No image returned from server');
+                }
+            })
+            .catch(error => {
+                console.error('Error navigating to next image:', error);
+
+                // Remove loading indicator
+                if (loadingIndicator.parentNode) {
+                    loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
+
+                // Show error message
+                alert('Failed to navigate to next image. Please try again.');
+            });
     }
 
-    // Function to switch between image filters
+    // Function to switch between image filters using AJAX
     function switchTab(tabId) {
+        // Show loading indicator
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.className = 'loading-indicator';
+        loadingIndicator.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div> Loading images...';
+        document.querySelector('.main-content').appendChild(loadingIndicator);
+
         // Update current tab
         currentTab = tabId;
 
@@ -2472,24 +2547,51 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('background-images-tab').classList.remove('active');
         document.getElementById(tabId + '-tab').classList.add('active');
 
-        // Update the annotation status to ensure counts are up-to-date
-        // and wait for it to complete before continuing
-        updateAnnotationStatus().then(() => {
-            // Filter images based on the selected tab is now handled by updateAnnotationStatus
+        // Use AJAX to get filtered images from the server
+        fetch(`/projects/${projectId}/filtered_images?tab=${tabId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to get filtered images');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Update local arrays with the filtered images
+                localImages = data.images || [];
 
-            // Update toggle button text with image counts
-            updateTabCounts();
+                // Update filtered images based on the current tab
+                filteredImages = [...localImages];
 
-            // If there are filtered images, load the first one
-            if (filteredImages.length > 0) {
-                loadLocalImage(filteredImages[0].name);
-            } else {
-                // If no images in the current filter, show a message
-                clearCanvas();
-                noImageMessage.style.display = 'block';
-                noImageMessage.textContent = 'No images in the current filter. Switch to a different filter or add more images.';
-            }
-        });
+                // Update the image counter and tab counts
+                updateImageCounter();
+                updateTabCounts();
+
+                // Remove loading indicator
+                if (loadingIndicator.parentNode) {
+                    loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
+
+                // If there are filtered images, load the first one
+                if (filteredImages.length > 0) {
+                    loadLocalImage(filteredImages[0].name);
+                } else {
+                    // If no images in the current filter, show a message
+                    clearCanvas();
+                    noImageMessage.style.display = 'block';
+                    noImageMessage.textContent = 'No images in the current filter. Switch to a different filter or add more images.';
+                }
+            })
+            .catch(error => {
+                console.error('Error switching tab:', error);
+
+                // Remove loading indicator
+                if (loadingIndicator.parentNode) {
+                    loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
+
+                // Show error message
+                alert('Failed to load images. Please try again.');
+            });
     }
 
     // Function to update toggle button text with image counts
@@ -2528,26 +2630,50 @@ document.addEventListener('DOMContentLoaded', function() {
         unannotatedImages = [];
         backgroundImages = [];
 
-        // Create an array of promises for checking each image
-        const promises = localImages.map(image => {
-            return checkImageAnnotationStatus(image.name)
-                .then(result => {
-                    if (result.hasAnnotations) {
-                        annotatedImages.push(image);
+        // Limit the number of concurrent API calls to avoid overwhelming the server
+        // and to prevent interference with the upload process
+        const batchSize = 3; // Reduced batch size to 3 images at a time to reduce server load
+        const imagesToProcess = [...localImages]; // Create a copy of the array
+        const results = [];
 
-                        // If it has a background annotation, add to background images array
-                        if (result.hasBackgroundAnnotation) {
-                            backgroundImages.push(image);
+        // Process images in batches
+        function processBatch() {
+            if (imagesToProcess.length === 0) {
+                // All images processed, update the UI
+                return Promise.resolve(results);
+            }
+
+            // Take the next batch of images
+            const batch = imagesToProcess.splice(0, batchSize);
+
+            // Process this batch
+            const batchPromises = batch.map(image => {
+                return checkImageAnnotationStatus(image.name)
+                    .then(result => {
+                        if (result.hasAnnotations) {
+                            annotatedImages.push(image);
+
+                            // If it has a background annotation, add to background images array
+                            if (result.hasBackgroundAnnotation) {
+                                backgroundImages.push(image);
+                            }
+                        } else {
+                            unannotatedImages.push(image);
                         }
-                    } else {
-                        unannotatedImages.push(image);
-                    }
-                    return result;
-                });
-        });
+                        results.push(result);
+                    });
+            });
 
-        // Return the promise so callers can wait for it to complete
-        return Promise.all(promises).then(() => {
+            // Wait for this batch to complete, then process the next batch
+            return Promise.all(batchPromises).then(() => {
+                // Add a longer delay between batches to allow other operations (like uploads) to proceed
+                // This significantly reduces contention with the upload process
+                return new Promise(resolve => setTimeout(() => resolve(processBatch()), 200));
+            });
+        }
+
+        // Start processing batches and return the promise
+        return processBatch().then(() => {
             // Update the filtered images based on the current tab
             filterImages();
 
@@ -2559,37 +2685,42 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to check if an image has annotations
     function checkImageAnnotationStatus(imageName) {
         return new Promise((resolve) => {
-            // Convert Windows backslashes to forward slashes for URL
-            const normalizedImageName = imageName.replace(/\\/g, '/');
+            // Add a significant delay before making the API call to reduce contention with uploads
+            // This helps prevent overwhelming the server with too many concurrent requests
+            // and allows upload operations to proceed without interference
+            setTimeout(() => {
+                // Convert Windows backslashes to forward slashes for URL
+                const normalizedImageName = imageName.replace(/\\/g, '/');
 
-            // Try to load annotations from server
-            fetch(`/projects/${projectId}/annotations/${encodeURIComponent(normalizedImageName)}`)
-                .then(response => response.json())
-                .then(data => {
-                    // Check if there are any annotations
-                    const hasAnnotations = data && data.length > 0;
+                // Try to load annotations from server
+                fetch(`/projects/${projectId}/annotations/${encodeURIComponent(normalizedImageName)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Check if there are any annotations
+                        const hasAnnotations = data && data.length > 0;
 
-                    // Check if there's a background annotation
-                    const hasBackgroundAnnotation = hasAnnotations && data.some(annotation => annotation.type === 'background');
+                        // Check if there's a background annotation
+                        const hasBackgroundAnnotation = hasAnnotations && data.some(annotation => annotation.type === 'background');
 
-                    // Resolve with an object containing both flags
-                    resolve({
-                        hasAnnotations,
-                        hasBackgroundAnnotation
+                        // Resolve with an object containing both flags
+                        resolve({
+                            hasAnnotations,
+                            hasBackgroundAnnotation
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error checking annotation status:', error);
+                        // If there's an error, assume no annotations
+                        resolve({
+                            hasAnnotations: false,
+                            hasBackgroundAnnotation: false
+                        });
                     });
-                })
-                .catch(error => {
-                    console.error('Error checking annotation status:', error);
-                    // If there's an error, assume no annotations
-                    resolve({
-                        hasAnnotations: false,
-                        hasBackgroundAnnotation: false
-                    });
-                });
+            }, 50); // Increased to 50ms delay to significantly reduce contention with uploads
         });
     }
 
-    // Function to mark the current image as background (no objects)
+    // Function to mark the current image as background (no objects) using AJAX
     function markAsBackground() {
         if (!currentImageName) {
             alert('No image selected');
@@ -2606,27 +2737,60 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Create a background annotation
-        const backgroundAnnotation = [{
-            "type": "background",
-            "class": null,
-            "points": []
-        }];
+        // Show loading indicator
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.className = 'loading-indicator';
+        loadingIndicator.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div> Marking as background...';
+        document.querySelector('.main-content').appendChild(loadingIndicator);
 
-        // Set the annotations array
-        annotations = backgroundAnnotation;
+        // Use AJAX to mark the image as background
+        fetch(`/projects/${projectId}/mark_as_background`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                image_name: currentImageName
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to mark image as background');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Remove loading indicator
+            if (loadingIndicator.parentNode) {
+                loadingIndicator.parentNode.removeChild(loadingIndicator);
+            }
 
-        // Save the annotations
-        saveAnnotations();
+            // Create a background annotation for local display
+            const backgroundAnnotation = [{
+                "type": "background",
+                "class": null,
+                "points": []
+            }];
 
-        // Draw the background annotation on the canvas
-        drawAnnotations();
+            // Set the annotations array
+            annotations = backgroundAnnotation;
 
-        // Update the annotation status and wait for it to complete
-        updateAnnotationStatus().then(() => {
-            // After annotation status is updated, filter images again to ensure
-            // the current image appears in the correct filter
-            filterImages();
+            // Draw the background annotation on the canvas
+            drawAnnotations();
+
+            // Refresh the current tab to update the filtered images
+            switchTab(currentTab);
+        })
+        .catch(error => {
+            console.error('Error marking image as background:', error);
+
+            // Remove loading indicator
+            if (loadingIndicator.parentNode) {
+                loadingIndicator.parentNode.removeChild(loadingIndicator);
+            }
+
+            // Show error message
+            alert('Failed to mark image as background. Please try again.');
         });
     }
 
