@@ -1142,6 +1142,161 @@ def annotations(project_id, image_name):
 
         return jsonify({'success': True})
 
+@app.route('/projects/<project_id>/filtered_images', methods=['GET'])
+def get_filtered_images(project_id):
+    """Get filtered images based on tab"""
+    project_path = os.path.join(app.config['PROJECTS_FOLDER'], project_id)
+
+    if not os.path.exists(project_path):
+        return jsonify({'error': 'Project not found'}), 404
+
+    # Get the tab parameter from the query string
+    tab = request.args.get('tab', 'all-images')
+
+    # Get all images
+    images_path = os.path.join(project_path, 'images')
+    os.makedirs(images_path, exist_ok=True)
+
+    all_images = []
+    if os.path.exists(images_path):
+        for filename in os.listdir(images_path):
+            if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')):
+                file_path = os.path.join(images_path, filename)
+                if os.path.isfile(file_path):
+                    # Create image info object
+                    image_info = {
+                        'name': filename,
+                        'path': file_path,
+                        'uploaded': datetime.fromtimestamp(os.path.getctime(file_path)).isoformat()
+                    }
+                    all_images.append(image_info)
+
+    # Sort images by creation time (newest first)
+    all_images.sort(key=lambda x: x['uploaded'], reverse=True)
+
+    # If tab is 'all-images', return all images
+    if tab == 'all-images':
+        return jsonify({'images': all_images})
+
+    # For other tabs, we need to check annotations
+    annotations_path = os.path.join(project_path, 'annotations')
+    os.makedirs(annotations_path, exist_ok=True)
+
+    annotated_images = []
+    unannotated_images = []
+    background_images = []
+
+    # Check each image for annotations
+    for image in all_images:
+        image_name = image['name']
+        annotation_file = os.path.join(annotations_path, f"{os.path.splitext(image_name)[0]}.json")
+
+        if os.path.exists(annotation_file):
+            with open(annotation_file, 'r') as f:
+                try:
+                    annotations = json.load(f)
+                    if annotations and len(annotations) > 0:
+                        annotated_images.append(image)
+
+                        # Check if it has a background annotation
+                        has_background = any(annotation.get('type') == 'background' for annotation in annotations)
+                        if has_background:
+                            background_images.append(image)
+                except json.JSONDecodeError:
+                    # If the file is not valid JSON, consider it unannotated
+                    unannotated_images.append(image)
+        else:
+            unannotated_images.append(image)
+
+    # Return images based on the tab
+    if tab == 'annotated-images':
+        return jsonify({'images': annotated_images})
+    elif tab == 'unannotated-images':
+        return jsonify({'images': unannotated_images})
+    elif tab == 'background-images':
+        return jsonify({'images': background_images})
+    else:
+        # Default to all images
+        return jsonify({'images': all_images})
+
+@app.route('/projects/<project_id>/mark_as_background', methods=['POST'])
+def mark_as_background(project_id):
+    """Mark an image as background (no objects)"""
+    project_path = os.path.join(app.config['PROJECTS_FOLDER'], project_id)
+
+    if not os.path.exists(project_path):
+        return jsonify({'error': 'Project not found'}), 404
+
+    # Get the image name from the request
+    data = request.json
+    image_name = data.get('image_name')
+
+    if not image_name:
+        return jsonify({'error': 'No image name provided'}), 400
+
+    # URL-decode the image name
+    import urllib.parse
+    decoded_image_name = urllib.parse.unquote(image_name)
+
+    # Create the annotations directory if it doesn't exist
+    annotations_path = os.path.join(project_path, 'annotations')
+    os.makedirs(annotations_path, exist_ok=True)
+
+    # Create a background annotation
+    background_annotation = [{
+        "type": "background",
+        "class": None,
+        "points": []
+    }]
+
+    # Save the background annotation
+    annotation_file = os.path.join(annotations_path, f"{os.path.splitext(decoded_image_name)[0]}.json")
+    with open(annotation_file, 'w') as f:
+        json.dump(background_annotation, f)
+
+    return jsonify({'success': True})
+
+@app.route('/projects/<project_id>/navigate_image', methods=['GET'])
+def navigate_image(project_id):
+    """Navigate to previous or next image"""
+    project_path = os.path.join(app.config['PROJECTS_FOLDER'], project_id)
+
+    if not os.path.exists(project_path):
+        return jsonify({'error': 'Project not found'}), 404
+
+    # Get parameters from the query string
+    current_image = request.args.get('current_image', '')
+    direction = request.args.get('direction', 'next')  # 'next' or 'previous'
+    tab = request.args.get('tab', 'all-images')
+
+    # Get filtered images based on the tab
+    filtered_images_response = get_filtered_images(project_id)
+    filtered_images_data = filtered_images_response.json
+    filtered_images = filtered_images_data.get('images', [])
+
+    if not filtered_images:
+        return jsonify({'error': 'No images found'}), 404
+
+    # Find the index of the current image
+    current_index = -1
+    for i, image in enumerate(filtered_images):
+        if image['name'] == current_image:
+            current_index = i
+            break
+
+    # If current image not found, return the first image
+    if current_index == -1:
+        return jsonify({'image': filtered_images[0]})
+
+    # Calculate the index of the previous/next image (with wrap-around)
+    if direction == 'previous':
+        new_index = (current_index - 1) % len(filtered_images)
+    else:  # direction == 'next'
+        new_index = (current_index + 1) % len(filtered_images)
+
+    # Return the new image
+    return jsonify({'image': filtered_images[new_index]})
+
 @app.route('/projects/<project_id>/export', methods=['POST'])
 def export_project(project_id):
     """Export project in YOLO format"""
