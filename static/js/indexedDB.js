@@ -3,27 +3,65 @@
 
 // Constants
 const DB_NAME = 'uploadsDB';
-const DB_VERSION = 1;
 const UPLOADS_STORE = 'pendingUploads';
 
 // Initialize the database
 function initDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-        
-        request.onerror = (event) => {
-            console.error('IndexedDB error:', event.target.error);
+        // First, try to open the database without specifying a version to get the current version
+        const checkVersionRequest = indexedDB.open(DB_NAME);
+
+        checkVersionRequest.onerror = (event) => {
+            console.error('IndexedDB version check error:', event.target.error);
             reject(event.target.error);
         };
-        
-        request.onsuccess = (event) => {
+
+        checkVersionRequest.onsuccess = (event) => {
             const db = event.target.result;
-            resolve(db);
+            const currentVersion = db.version;
+            db.close();
+
+            // Now open with the correct version
+            const request = indexedDB.open(DB_NAME, currentVersion);
+
+            request.onerror = (event) => {
+                console.error('IndexedDB error:', event.target.error);
+                reject(event.target.error);
+            };
+
+            request.onsuccess = (event) => {
+                const db = event.target.result;
+
+                // Check if our store exists, if not we need to upgrade
+                if (!db.objectStoreNames.contains(UPLOADS_STORE)) {
+                    db.close();
+                    // Need to upgrade to create our store
+                    const upgradeRequest = indexedDB.open(DB_NAME, currentVersion + 1);
+
+                    upgradeRequest.onerror = (event) => {
+                        console.error('IndexedDB upgrade error:', event.target.error);
+                        reject(event.target.error);
+                    };
+
+                    upgradeRequest.onsuccess = (event) => {
+                        resolve(event.target.result);
+                    };
+
+                    upgradeRequest.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        // Create object store for pending uploads
+                        const store = db.createObjectStore(UPLOADS_STORE, { keyPath: 'id' });
+                        store.createIndex('projectId', 'projectId', { unique: false });
+                    };
+                } else {
+                    resolve(db);
+                }
+            };
         };
-        
-        request.onupgradeneeded = (event) => {
+
+        checkVersionRequest.onupgradeneeded = (event) => {
             const db = event.target.result;
-            
+
             // Create object store for pending uploads
             if (!db.objectStoreNames.contains(UPLOADS_STORE)) {
                 const store = db.createObjectStore(UPLOADS_STORE, { keyPath: 'id' });
@@ -39,11 +77,11 @@ function savePendingUploadsToIndexedDB(projectId, projectUploads) {
         initDB().then(db => {
             const transaction = db.transaction([UPLOADS_STORE], 'readwrite');
             const store = transaction.objectStore(UPLOADS_STORE);
-            
+
             // First, delete existing entries for this project
             const index = store.index('projectId');
             const request = index.openKeyCursor(IDBKeyRange.only(projectId));
-            
+
             request.onsuccess = (event) => {
                 const cursor = event.target.result;
                 if (cursor) {
@@ -56,7 +94,7 @@ function savePendingUploadsToIndexedDB(projectId, projectUploads) {
                         transaction.oncomplete = () => resolve();
                         return;
                     }
-                    
+
                     let completed = 0;
                     entries.forEach(([taskId, uploadInfo]) => {
                         // Add projectId to each entry and use taskId as part of the key
@@ -66,9 +104,9 @@ function savePendingUploadsToIndexedDB(projectId, projectUploads) {
                             projectId: projectId,
                             ...uploadInfo
                         };
-                        
+
                         const addRequest = store.add(entry);
-                        
+
                         addRequest.onsuccess = () => {
                             completed++;
                             if (completed === entries.length) {
@@ -76,7 +114,7 @@ function savePendingUploadsToIndexedDB(projectId, projectUploads) {
                                 transaction.oncomplete = () => resolve();
                             }
                         };
-                        
+
                         addRequest.onerror = (event) => {
                             console.error('Error adding entry:', event.target.error);
                             // Continue with other entries even if one fails
@@ -88,12 +126,12 @@ function savePendingUploadsToIndexedDB(projectId, projectUploads) {
                     });
                 }
             };
-            
+
             request.onerror = (event) => {
                 console.error('Error accessing index:', event.target.error);
                 reject(event.target.error);
             };
-            
+
             transaction.onerror = (event) => {
                 console.error('Transaction error:', event.target.error);
                 reject(event.target.error);
@@ -113,11 +151,11 @@ function loadPendingUploadsFromIndexedDB(projectId) {
             const store = transaction.objectStore(UPLOADS_STORE);
             const index = store.index('projectId');
             const request = index.getAll(IDBKeyRange.only(projectId));
-            
+
             request.onsuccess = (event) => {
                 const results = event.target.result;
                 const projectUploads = {};
-                
+
                 // Convert array of entries back to object with taskId as key
                 results.forEach(entry => {
                     projectUploads[entry.taskId] = {
@@ -125,10 +163,10 @@ function loadPendingUploadsFromIndexedDB(projectId) {
                         projectId: entry.projectId
                     };
                 });
-                
+
                 resolve(projectUploads);
             };
-            
+
             request.onerror = (event) => {
                 console.error('Error loading uploads:', event.target.error);
                 reject(event.target.error);
@@ -148,7 +186,7 @@ function deletePendingUploadsFromIndexedDB(projectId) {
             const store = transaction.objectStore(UPLOADS_STORE);
             const index = store.index('projectId');
             const request = index.openKeyCursor(IDBKeyRange.only(projectId));
-            
+
             request.onsuccess = (event) => {
                 const cursor = event.target.result;
                 if (cursor) {
@@ -158,7 +196,7 @@ function deletePendingUploadsFromIndexedDB(projectId) {
                     transaction.oncomplete = () => resolve();
                 }
             };
-            
+
             request.onerror = (event) => {
                 console.error('Error deleting uploads:', event.target.error);
                 reject(event.target.error);
